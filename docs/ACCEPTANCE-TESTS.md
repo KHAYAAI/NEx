@@ -20,7 +20,7 @@ Each test has a stable ID (`AT-<phase>-<n>`) so results and regressions can be r
 
 **Pass condition:** the interaction succeeds with WAN access removed, and no component crashes, hangs waiting on a network call, or silently fails without a clear local-mode indication to the user.
 
-**Current status (Phase 0):** no hub stack exists yet. The CI job for this phase runs a placeholder that asserts the network-namespace harness itself works (i.e. that a job run inside it correctly has no WAN access), so the harness is proven before there's a real service to test. This gets replaced with the real test the moment Phase 2 has a running hub process.
+**Status:** the placeholder harness job still runs (cheap, still a valid sanity check), but the real test now exists too — see AT-2-2 below, which is this test run against the actual hub process (`hub/scripts/hub-stack-demo.sh`), not a generic namespace check.
 
 ### AT-1-1 — CRDT reconciliation, both nodes online **(CI, implemented — `sync-protocol/test/sync.test.js`)**
 
@@ -52,7 +52,7 @@ Each test has a stable ID (`AT-<phase>-<n>`) so results and regressions can be r
 
 **Status:** implemented and passing, both for a same-key map write (`AT-1-3`) and a concurrent list append (`AT-1-3b`, added to cover the "nothing lost" case for the append-only event log specifically). Full writeup in `docs/MERGE-SEMANTICS.md`. AT-1-1 through AT-1-3 have also been re-run for real over an actual WireGuard tunnel between two separate network namespaces (`infra/wireguard-poc/run-demo.sh`), not just loopback — all passing. **Remaining caveat:** Headscale-mediated discovery and real network conditions (NAT, latency, packet loss, real hardware) are still unvalidated; see `docs/MERGE-SEMANTICS.md`'s "What's still not validated."
 
-### AT-2-1 — Hub answers a question and logs it **(CI, from Phase 2)**
+### AT-2-1 — Hub answers a question and logs it **(CI, implemented — `hub/scripts/hub-stack-demo.sh`)**
 
 **Phase:** 2 exit criteria.
 
@@ -60,13 +60,17 @@ Each test has a stable ID (`AT-<phase>-<n>`) so results and regressions can be r
 
 **Pass condition:** the hub answers using the local model, and the interaction appears in the event log within 1 second.
 
-### AT-2-2 — Survives network cable pull
+**Status:** implemented and passing against the real running stack (real llama.cpp + real Qwen2 tokenizer + real MCP tool call, **synthetic random model weights** — see `hub/models/README.md` for why). Measured latency for a plain question is consistently under 1 second (typically 150–550ms in this environment). The MCP tool-call path (a `search:` question) is also exercised and answers correctly, but its measured latency (~1.1–1.4s, dominated by MCP subprocess startup) is reported rather than gated at 1 second — the stated exit criterion is about the baseline local-model answer, and `hub/README.md` explains the gap honestly rather than silently claiming it too.
+
+### AT-2-2 — Survives network cable pull **(CI, implemented — `hub/scripts/hub-stack-demo.sh`)**
 
 **Phase:** 2 exit criteria.
 
 **Steps:** while the hub is running, physically disconnect (or simulate disconnecting) its network connection.
 
 **Pass condition:** the hub process does not crash; local-only functionality continues to work.
+
+**Status:** implemented and passing — the entire hub process (llama-server + agent + event log) runs inside a network namespace with no WAN route at all (not just a simulated cable pull on an already-running process), confirms an outbound call genuinely fails from that namespace, and confirms the hub still answers a question and logs it within 1 second regardless. This is the real replacement for AT-0-1's original placeholder, as that test's own note said it would be once Phase 2 existed.
 
 ### AT-5-1 — No outbound calls outside the tunnel, instrumented **(CI, from Phase 5)**
 
@@ -83,3 +87,4 @@ Each test has a stable ID (`AT-<phase>-<n>`) so results and regressions can be r
 - v0.1 (2026-09-16): initial set — AT-0-1 (placeholder harness), AT-1-1..3, AT-2-1..2, AT-5-1 stubs for future phases.
 - v0.2 (2026-09-16): AT-1-1, AT-1-2, AT-1-3(b) implemented and passing against `sync-protocol/`; wired into CI. See `docs/MERGE-SEMANTICS.md`.
 - v0.3 (2026-09-16): AT-1-1..3 re-validated over a real WireGuard tunnel between two network namespaces (`infra/wireguard-poc/`), not just loopback.
+- v0.4 (2026-09-16): AT-2-1 and AT-2-2 implemented and passing against `hub/scripts/hub-stack-demo.sh` (real llama.cpp + real Qwen2 tokenizer + synthetic weights — see `hub/models/README.md`); wired into CI. AT-2-2 fulfills AT-0-1's original placeholder note.

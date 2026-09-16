@@ -16,7 +16,11 @@ Locked before Phase 1 work starts. Full reasoning in `docs/DECISIONS.md`.
 
 ## Status
 
-Phase 0 — scaffolding. See `CLAUDE.md` §5 for the full phase list and exit criteria.
+- **Phase 0** — scaffolding. Done.
+- **Phase 1** — sync protocol prototype. Exit criteria met: CRDT sync (`sync-protocol/`) validated both on loopback and over a real WireGuard tunnel between two network namespaces (`infra/wireguard-poc/`). See `docs/MERGE-SEMANTICS.md`.
+- **Phase 2** — hub software stack bring-up. Exit criteria met (`hub/`): local model + agent loop + one MCP tool + event log, verified both online and with no WAN route at all. Runs on a real llama.cpp + real Qwen2 tokenizer with synthetic (untrained) weights — see `hub/models/README.md` for why, and `hub/README.md` for what's deliberately still open (Letta/Qdrant, Home Assistant, NixOS validation).
+
+See `CLAUDE.md` §5 for the full phase list and exit criteria, and `docs/ACCEPTANCE-TESTS.md` for the versioned test-by-test status.
 
 ## Repo layout
 
