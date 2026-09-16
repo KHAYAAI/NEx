@@ -33,9 +33,12 @@ from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "memory"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "dreaming"))
 from eventlog import EventLog  # noqa: E402
+from facts import FactStore  # noqa: E402
 
 MCP_SERVER_SCRIPT = Path(__file__).resolve().parent.parent / "apps" / "file-search" / "server.py"
+RECALL_PHRASE = "what do you know about me"
 
 
 async def call_file_search_tool(query: str, root: Path) -> str:
@@ -96,10 +99,33 @@ def call_local_model(llama_url: str, prompt: str, *, model_path: Path | None = N
     last_error.raise_for_status()
 
 
-async def answer(question: str, *, llama_url: str, mcp_root: Path, model_path: Path | None):
+def recall_answer(question: str, *, qdrant_path: Path | None, audit_db: Path | None, llama_url: str, vector_size: int):
+    """Phase 3's exit criterion: "the hub's answers to 'what do you know
+    about me' visibly reflect accumulated facts, and every fact is
+    traceable back to the source interaction that produced it." This is
+    answered directly from the fact store (hub/dreaming/facts.py), not
+    the local model — the model's random weights would just add noise
+    on top of an already-correct, already-traceable answer."""
+    if qdrant_path is None or audit_db is None:
+        return None
+    store = FactStore(qdrant_path, audit_db, llama_url, vector_size)
+    reply = store.summarize()
+    store.close()
+    return reply
+
+
+async def answer(question: str, *, llama_url: str, mcp_root: Path, model_path: Path | None,
+                  qdrant_path: Path | None = None, audit_db: Path | None = None, vector_size: int = 64):
     tool_used = None
     tool_result = None
     prompt = question
+
+    if question.strip().lower().rstrip("?") == RECALL_PHRASE:
+        recalled = recall_answer(
+            question, qdrant_path=qdrant_path, audit_db=audit_db, llama_url=llama_url, vector_size=vector_size
+        )
+        if recalled is not None:
+            return recalled, "fact_recall", None
 
     if question.lower().startswith("search:"):
         query = question.split(":", 1)[1].strip()
@@ -124,12 +150,19 @@ def main():
                     help="path to the GGUF being served — used to find its "
                          "<model>.special_token_ids.json sidecar, if any")
     p.add_argument("--model-label", default="nex-tiny-qwen2-synthetic")
+    p.add_argument("--qdrant-path", type=Path, default=None,
+                    help="Phase 3 fact store path — enables 'what do you know about me' (see hub/dreaming/)")
+    p.add_argument("--facts-audit-db", type=Path, default=None)
+    p.add_argument("--vector-size", type=int, default=64)
     args = p.parse_args()
 
     log = EventLog(args.db_path)
     t0 = time.monotonic()
     reply, tool_used, tool_result = asyncio.run(
-        answer(args.question, llama_url=args.llama_url, mcp_root=args.mcp_root, model_path=args.model_path)
+        answer(
+            args.question, llama_url=args.llama_url, mcp_root=args.mcp_root, model_path=args.model_path,
+            qdrant_path=args.qdrant_path, audit_db=args.facts_audit_db, vector_size=args.vector_size,
+        )
     )
     latency_ms = (time.monotonic() - t0) * 1000
 

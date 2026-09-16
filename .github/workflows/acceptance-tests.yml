@@ -105,3 +105,26 @@ jobs:
         # sudo resets PATH; the script builds/finds llama.cpp, a Python
         # venv, and the synthetic model itself (see hub/README.md).
         run: sudo env PATH="$PATH" hub/scripts/hub-stack-demo.sh
+
+  dreaming-pipeline:
+    name: AT-3-1 dreaming pipeline (Phase 3)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache llama.cpp build
+        uses: actions/cache@v4
+        with:
+          path: /tmp/nex-llama.cpp
+          key: llama-cpp-${{ runner.os }}-${{ hashFiles('.github/workflows/acceptance-tests.yml') }}
+
+      - name: Install build tooling
+        run: sudo apt-get update -qq && sudo apt-get install -y cmake build-essential
+
+      - name: Run the dreaming pipeline demo (AT-3-1)
+        # No root needed here — no network-namespace check in this one.
+        run: hub/scripts/dreaming-demo.sh

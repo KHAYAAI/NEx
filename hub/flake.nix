@@ -14,16 +14,18 @@
     - llama-server as a systemd service, serving the model at
       hub/models/ (swap the synthetic model for a real Qwen3 GGUF once
       one exists — see hub/models/README.md).
-    - the agent CLI's Python environment (mcp, httpx) reproducibly,
-      instead of the ad-hoc venv used to develop/test it in this
-      environment.
+    - the agent CLI's Python environment (mcp, httpx, qdrant-client)
+      reproducibly, instead of the ad-hoc venv used to develop/test it
+      in this environment.
     - the event log's data directory.
+    - nex-dreaming as a systemd timer running hub/dreaming/consolidate.py
+      nightly (Phase 3) against that same data directory.
 
-  Deliberately NOT yet declared: Letta/Qdrant, Home Assistant, the
-  Headscale/WireGuard tunnel service (infra/headscale/,
-  infra/wireguard-poc/) — those are still their own untracked-by-Nix
-  pieces per their own READMEs, and folding them into this flake is
-  follow-up work, not done here.
+  Deliberately NOT yet declared: Letta, a served (non-embedded) Qdrant,
+  Home Assistant, the Headscale/WireGuard tunnel service
+  (infra/headscale/, infra/wireguard-poc/) — those are still their own
+  untracked-by-Nix pieces per their own READMEs, and folding them into
+  this flake is follow-up work, not done here.
 */
 {
   description = "NEx hub node — Phase 2 software stack (CLAUDE.md)";
@@ -39,6 +41,7 @@
 
       hubPython = pkgs.python3.withPackages (ps: [
         ps.httpx
+        ps.qdrant-client
         # `mcp` (the Model Context Protocol SDK) isn't in nixpkgs as of
         # this writing; package it via poetry2nix/buildPythonPackage once
         # this flake is actually built against real Nix tooling. Tracked
@@ -83,6 +86,32 @@
           systemd.tmpfiles.rules = [
             "d ${config.nex.hub.dataDir} 0750 root root -"
           ];
+
+          # Phase 3: nightly consolidation. Runs once a day; consolidate.py
+          # is idempotent within a run (it tracks its own checkpoint in
+          # the audit db) so a missed or double-fired timer isn't harmful.
+          systemd.services.nex-dreaming = {
+            description = "NEx hub — nightly dreaming consolidation";
+            serviceConfig = {
+              Type = "oneshot";
+              ExecStart = "${hubPython}/bin/python3 "
+                + "${self}/hub/dreaming/consolidate.py "
+                + "--event-db ${config.nex.hub.dataDir}/events.db "
+                + "--qdrant-path ${config.nex.hub.dataDir}/qdrant "
+                + "--audit-db ${config.nex.hub.dataDir}/dreaming-audit.db";
+              DynamicUser = true;
+              StateDirectory = "nex-hub";
+            };
+          };
+
+          systemd.timers.nex-dreaming = {
+            description = "Run nex-dreaming nightly";
+            wantedBy = [ "timers.target" ];
+            timerConfig = {
+              OnCalendar = "03:00";
+              Persistent = true; # catch up if the hub was off at 03:00
+            };
+          };
 
           environment.systemPackages = [ hubPython ];
         };

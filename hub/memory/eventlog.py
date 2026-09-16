@@ -35,14 +35,29 @@ class EventLog:
         self.conn.execute(SCHEMA)
         self.conn.commit()
 
-    def log_interaction(self, *, question, answer, model, latency_ms, tool_used=None, tool_result=None):
+    def log_interaction(self, *, question, answer, model, latency_ms, tool_used=None, tool_result=None, ts_ms=None):
+        # ts_ms override exists for the Phase 3 dreaming-pipeline demo,
+        # which simulates "a week of varied test interactions"
+        # (CLAUDE.md's Phase 3 exit criteria) without waiting a real
+        # week — see hub/scripts/dreaming-demo.sh. Real callers never
+        # need it; the default is always the real clock.
         cur = self.conn.execute(
             "INSERT INTO interactions (ts_ms, question, answer, tool_used, tool_result, latency_ms, model) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (int(time.time() * 1000), question, answer, tool_used, tool_result, latency_ms, model),
+            (ts_ms if ts_ms is not None else int(time.time() * 1000),
+             question, answer, tool_used, tool_result, latency_ms, model),
         )
         self.conn.commit()
         return cur.lastrowid
+
+    def since(self, after_id):
+        cur = self.conn.execute(
+            "SELECT id, ts_ms, question, answer, tool_used, tool_result, latency_ms, model "
+            "FROM interactions WHERE id > ? ORDER BY id ASC",
+            (after_id,),
+        )
+        cols = [d[0] for d in cur.description]
+        return [dict(zip(cols, row)) for row in cur.fetchall()]
 
     def recent(self, n=10):
         cur = self.conn.execute(

@@ -72,6 +72,16 @@ Each test has a stable ID (`AT-<phase>-<n>`) so results and regressions can be r
 
 **Status:** implemented and passing — the entire hub process (llama-server + agent + event log) runs inside a network namespace with no WAN route at all (not just a simulated cable pull on an already-running process), confirms an outbound call genuinely fails from that namespace, and confirms the hub still answers a question and logs it within 1 second regardless. This is the real replacement for AT-0-1's original placeholder, as that test's own note said it would be once Phase 2 existed.
 
+### AT-3-1 — Dreaming pipeline: accumulated, decaying, auditable facts **(CI, implemented — `hub/scripts/dreaming-demo.sh`)**
+
+**Phase:** 3 exit criteria (`CLAUDE.md` §5, Phase 3).
+
+**Steps:** simulate a week of varied interactions (some facts mentioned repeatedly across days, one mentioned only once), running the nightly consolidation job once per simulated day. Ask "what do you know about me?" afterward.
+
+**Pass condition:** the answer visibly reflects the accumulated, reinforced facts, each traceable back to the exact source interaction id(s) that produced it; a fact mentioned once and never reinforced loses active status (decays) after the configured threshold, but is never silently dropped — its pruning is itself logged with a reason, and the underlying record is retrievable.
+
+**Status:** implemented and passing. Fact extraction is rule-based (regex over the user's own statements — see `hub/dreaming/README.md` for why, same reasoning as the agent loop's tool-call dispatch), but the storage/reinforcement/decay/audit mechanism is real: real Qdrant (embedded — Docker Hub is also blocked by this environment's network policy, so this runs `qdrant-client`'s embedded mode rather than a served instance), real embeddings from the hub's actual `llama-server` (semantically meaningless, since the underlying model is synthetic — same caveat as `hub/models/README.md` throughout), real reinforcement counting, and a real append-only audit log of every extract/reinforce/prune action. A real bug surfaced and fixed while building this: `consolidate.py` originally stamped every fact's "last reinforced" time with the *consolidation run's* clock instead of the *interaction's own* timestamp, which silently broke decay (see the comment in `hub/dreaming/consolidate.py`). QLoRA fine-tuning remains explicitly out of scope, per the plan — nothing here touches model weights.
+
 ### AT-5-1 — No outbound calls outside the tunnel, instrumented **(CI, from Phase 5)**
 
 **Phase:** 5 security pass.
@@ -88,3 +98,4 @@ Each test has a stable ID (`AT-<phase>-<n>`) so results and regressions can be r
 - v0.2 (2026-09-16): AT-1-1, AT-1-2, AT-1-3(b) implemented and passing against `sync-protocol/`; wired into CI. See `docs/MERGE-SEMANTICS.md`.
 - v0.3 (2026-09-16): AT-1-1..3 re-validated over a real WireGuard tunnel between two network namespaces (`infra/wireguard-poc/`), not just loopback.
 - v0.4 (2026-09-16): AT-2-1 and AT-2-2 implemented and passing against `hub/scripts/hub-stack-demo.sh` (real llama.cpp + real Qwen2 tokenizer + synthetic weights — see `hub/models/README.md`); wired into CI. AT-2-2 fulfills AT-0-1's original placeholder note.
+- v0.5 (2026-09-16): AT-3-1 implemented and passing against `hub/scripts/dreaming-demo.sh` (real Qdrant, embedded; real embeddings from the hub's own model; rule-based fact extraction — see `hub/dreaming/README.md`); wired into CI.
