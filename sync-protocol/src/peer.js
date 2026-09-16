@@ -1,4 +1,5 @@
 import * as Automerge from '@automerge/automerge';
+import { multiaddr } from '@multiformats/multiaddr';
 import { createNode } from './node.js';
 import { EventLog } from './eventLog.js';
 import { encodeFrame, FrameDecoder } from './framing.js';
@@ -34,8 +35,8 @@ export class Peer {
     return this.#node.peerId;
   }
 
-  async start() {
-    this.#node = await createNode();
+  async start(options = {}) {
+    this.#node = await createNode(options);
     await this.#node.handle(SYNC_PROTOCOL, (stream, connection) => {
       this.#startSession(connection.remotePeer.toString(), stream);
     });
@@ -56,6 +57,19 @@ export class Peer {
     if (addrs.length === 0) throw new Error('peer has no listen addresses');
     const stream = await this.#node.dialProtocol(addrs[0], SYNC_PROTOCOL);
     this.#startSession(otherPeer.peerId.toString(), stream);
+  }
+
+  // Same as connectTo, but for dialing a peer running in a different
+  // process (e.g. across a real WireGuard tunnel) where there's no
+  // in-process Peer object to call .multiaddrs() on — just the address
+  // string it printed, e.g. "/ip4/10.99.0.1/tcp/4001/p2p/12D3Koo...".
+  async connectToAddress(addrString) {
+    const addr = multiaddr(addrString);
+    const peerIdStr = addr.getComponents().find((c) => c.name === 'p2p')?.value;
+    if (!peerIdStr) throw new Error(`multiaddr has no /p2p/<peerId> suffix: ${addrString}`);
+    const stream = await this.#node.dialProtocol(addr, SYNC_PROTOCOL);
+    this.#startSession(peerIdStr, stream);
+    return peerIdStr;
   }
 
   disconnectFrom(otherPeer) {

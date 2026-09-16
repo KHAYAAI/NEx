@@ -35,11 +35,15 @@ This is the exit criterion. It passes without any human intervention, code path,
 
 Both nodes append a *different* event to the shared list while disconnected. Unlike the map case, list concurrent-insert isn't a "conflict" Automerge surfaces via `getConflicts` — both insertions are kept (nothing is lost), and Automerge's list CRDT gives both nodes the identical resulting order after merge (verified by comparing the two nodes' `events` id arrays directly, not just their lengths).
 
-## What's not yet validated
+## Real WireGuard transport — validated
 
-- **Real WireGuard transport.** This prototype's "encrypted P2P link" is Noise-over-TCP inside libp2p (defense-in-depth alongside, not instead of, WireGuard in production — see the comment in `sync-protocol/src/node.js`). It has not been run inside an actual WireGuard tunnel between two physical hosts.
-- **Headscale-mediated discovery.** `infra/headscale/` documents the intended control-plane config; it has not been stood up and used to establish the connection this prototype's nodes then ride on top of.
-- **NAT traversal / real network conditions.** Everything above ran on loopback. Latency, packet loss, and asymmetric NAT between a real home hub and a phone on cellular are unexercised.
+`infra/wireguard-poc/run-demo.sh` re-runs AT-1-1, AT-1-2, and AT-1-3 across a real WireGuard tunnel between two separate Linux network namespaces (not loopback, not libp2p's Noise encryption standing in for it — an actual WireGuard handshake and tunnel, built with `wireguard-go` since this environment has no kernel WireGuard module). All three passed. See `infra/wireguard-poc/README.md` for exactly what that does and doesn't prove — in short, it proves the CRDT layer survives a real encrypted tunnel between genuinely separate network stacks; it does not yet prove Headscale-mediated discovery or real-world network conditions (NAT, latency, packet loss), which remain open below.
+
+## What's still not validated
+
+- **Headscale-mediated discovery.** `infra/headscale/` documents the intended control-plane config; it has not been stood up and used to establish the connection nodes then ride on top of. `infra/wireguard-poc/run-demo.sh` configures WireGuard peers statically (keys and endpoints known in advance) rather than through Headscale.
+- **NAT traversal / real network conditions.** The WireGuard tunnel validated above runs over a veth link between two namespaces on one machine — effectively zero latency, zero packet loss, no NAT. A real home hub behind a residential router and a phone on cellular will see all three, and Phase 5's load test is where that gets exercised.
+- **Real hardware.** Both "nodes" in every scenario above, WireGuard-tunneled or not, are processes on the same physical machine. Two genuinely separate network namespaces is a legitimate, standard technique for testing network-layer code honestly, but it isn't two physical hosts.
 - **Larger-scale conflict load.** The test matrix uses a handful of writes. Phase 5's "load-test the sync layer with realistic conflict rates" is explicitly future work, not covered here.
 
-None of the above change the CRDT correctness result above — Automerge's merge semantics don't depend on the transport underneath them — but they're the gap between "the moat works in principle" and "the moat works on real hardware," and Phase 1 isn't actually done until that gap is closed.
+None of the above change the CRDT correctness result — Automerge's merge semantics don't depend on the transport underneath them, and that's now been shown true for a real encrypted tunnel, not just asserted. What's left is Headscale integration and real-hardware/real-network validation, which is Phase 2+ territory (the hub and phone don't exist as real devices yet) rather than something further loopback or namespace testing can close.

@@ -2,7 +2,7 @@
 
 Self-hosted Headscale instance acting as the WireGuard mesh control plane for hub↔phone (and later hub↔hub) peer discovery and key exchange, per `CLAUDE.md` §5 Phase 1 and §2's architecture diagram.
 
-**Status: config only, not yet stood up or tested.** This directory documents the intended deployment so Phase 1's transport-layer work is reviewable, but nothing here has run against real hardware yet — see `docs/MERGE-SEMANTICS.md` ("What's not yet validated") for the honest gap between this and the working CRDT-sync prototype in `sync-protocol/`. Do not cite this config as proof the WireGuard/Headscale layer works; it isn't, yet.
+**Status: config only, Headscale itself not yet stood up or tested.** This directory documents the intended deployment so Phase 1's transport-layer work is reviewable. Note the scope: `infra/wireguard-poc/run-demo.sh` has validated that the CRDT sync prototype works correctly over a real WireGuard tunnel (see `docs/MERGE-SEMANTICS.md`), but that tunnel's peers are configured statically — known keys, known endpoints, no Headscale involved. What's still unvalidated here specifically is Headscale's own role: dynamic peer discovery and key exchange so hub and phone don't need to be manually configured with each other's keys/addresses. Do not cite this config as proof that part works; it isn't, yet.
 
 ## What this is for
 

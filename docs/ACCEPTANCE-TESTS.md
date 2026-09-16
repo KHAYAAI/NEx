@@ -50,7 +50,7 @@ Each test has a stable ID (`AT-<phase>-<n>`) so results and regressions can be r
 
 **Pass condition:** the conflict resolves deterministically (both nodes converge to the identical resulting state) and losslessly (per Automerge/Yjs CRDT semantics — e.g. both values preserved in a way the app layer can surface, or a documented deterministic winner) with **no manual intervention**. Document the exact merge semantics observed in `docs/` alongside this test's result.
 
-**Status:** implemented and passing, both for a same-key map write (`AT-1-3`) and a concurrent list append (`AT-1-3b`, added to cover the "nothing lost" case for the append-only event log specifically). Full writeup in `docs/MERGE-SEMANTICS.md`. **Caveat:** this proves the CRDT layer over a libp2p/Noise transport on loopback — it does not yet prove the real WireGuard/Headscale transport (`infra/headscale/`) or real network conditions (NAT, latency, packet loss). Phase 1 is not fully closed out until that gap is closed; see `docs/MERGE-SEMANTICS.md`'s "What's not yet validated."
+**Status:** implemented and passing, both for a same-key map write (`AT-1-3`) and a concurrent list append (`AT-1-3b`, added to cover the "nothing lost" case for the append-only event log specifically). Full writeup in `docs/MERGE-SEMANTICS.md`. AT-1-1 through AT-1-3 have also been re-run for real over an actual WireGuard tunnel between two separate network namespaces (`infra/wireguard-poc/run-demo.sh`), not just loopback — all passing. **Remaining caveat:** Headscale-mediated discovery and real network conditions (NAT, latency, packet loss, real hardware) are still unvalidated; see `docs/MERGE-SEMANTICS.md`'s "What's still not validated."
 
 ### AT-2-1 — Hub answers a question and logs it **(CI, from Phase 2)**
 
@@ -82,3 +82,4 @@ Each test has a stable ID (`AT-<phase>-<n>`) so results and regressions can be r
 
 - v0.1 (2026-09-16): initial set — AT-0-1 (placeholder harness), AT-1-1..3, AT-2-1..2, AT-5-1 stubs for future phases.
 - v0.2 (2026-09-16): AT-1-1, AT-1-2, AT-1-3(b) implemented and passing against `sync-protocol/`; wired into CI. See `docs/MERGE-SEMANTICS.md`.
+- v0.3 (2026-09-16): AT-1-1..3 re-validated over a real WireGuard tunnel between two network namespaces (`infra/wireguard-poc/`), not just loopback.
