@@ -1,0 +1,32 @@
+name: Acceptance tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  airplane-mode-harness:
+    name: AT-0-1 airplane mode harness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify network namespace has no WAN access (AT-0-1 placeholder)
+        run: |
+          set -euo pipefail
+          echo "Proving the isolated-namespace harness itself has no WAN access."
+          sudo ip netns add nex-airplane-mode
+          sudo ip netns exec nex-airplane-mode ip link set lo up
+
+          if sudo ip netns exec nex-airplane-mode timeout 3 sh -c 'cat < /dev/null > /dev/tcp/1.1.1.1/443' 2>/dev/null; then
+            echo "FAIL: outbound connection succeeded inside the airplane-mode namespace" >&2
+            exit 1
+          fi
+          echo "PASS: no outbound WAN access inside the airplane-mode namespace"
+          sudo ip netns delete nex-airplane-mode
+
+      - name: Note
+        run: |
+          echo "This job proves the harness only. It will be replaced by the real"
+          echo "hub-process test (docs/ACCEPTANCE-TESTS.md AT-0-1) once Phase 2 exists."
