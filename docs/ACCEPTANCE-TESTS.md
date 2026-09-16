@@ -22,7 +22,7 @@ Each test has a stable ID (`AT-<phase>-<n>`) so results and regressions can be r
 
 **Current status (Phase 0):** no hub stack exists yet. The CI job for this phase runs a placeholder that asserts the network-namespace harness itself works (i.e. that a job run inside it correctly has no WAN access), so the harness is proven before there's a real service to test. This gets replaced with the real test the moment Phase 2 has a running hub process.
 
-### AT-1-1 — CRDT reconciliation, both nodes online
+### AT-1-1 — CRDT reconciliation, both nodes online **(CI, implemented — `sync-protocol/test/sync.test.js`)**
 
 **Phase:** 1 (sync protocol prototype)
 
@@ -30,7 +30,9 @@ Each test has a stable ID (`AT-<phase>-<n>`) so results and regressions can be r
 
 **Pass condition:** event appears on B, unmodified, within the documented window.
 
-### AT-1-2 — Reconnect after single-node offline
+**Status:** implemented and passing. Loopback round-trip is tens of milliseconds; see `docs/MERGE-SEMANTICS.md`.
+
+### AT-1-2 — Reconnect after single-node offline **(CI, implemented — `sync-protocol/test/sync.test.js`)**
 
 **Phase:** 1
 
@@ -38,13 +40,17 @@ Each test has a stable ID (`AT-<phase>-<n>`) so results and regressions can be r
 
 **Pass condition:** all events written on A while B was offline appear on B after reconnect, in a consistent order, with no data loss.
 
-### AT-1-3 — Concurrent conflicting write (the hard case)
+**Status:** implemented and passing.
+
+### AT-1-3 — Concurrent conflicting write (the hard case) **(CI, implemented — `sync-protocol/test/sync.test.js`)**
 
 **Phase:** 1 — this is Phase 1's actual exit criteria (`CLAUDE.md` §5, Phase 1).
 
 **Steps:** disconnect both nodes from each other. On each node, independently write to the *same logical field* (e.g. both set the same key to different values, or both append conflicting edits to the same structure). Reconnect both nodes.
 
 **Pass condition:** the conflict resolves deterministically (both nodes converge to the identical resulting state) and losslessly (per Automerge/Yjs CRDT semantics — e.g. both values preserved in a way the app layer can surface, or a documented deterministic winner) with **no manual intervention**. Document the exact merge semantics observed in `docs/` alongside this test's result.
+
+**Status:** implemented and passing, both for a same-key map write (`AT-1-3`) and a concurrent list append (`AT-1-3b`, added to cover the "nothing lost" case for the append-only event log specifically). Full writeup in `docs/MERGE-SEMANTICS.md`. **Caveat:** this proves the CRDT layer over a libp2p/Noise transport on loopback — it does not yet prove the real WireGuard/Headscale transport (`infra/headscale/`) or real network conditions (NAT, latency, packet loss). Phase 1 is not fully closed out until that gap is closed; see `docs/MERGE-SEMANTICS.md`'s "What's not yet validated."
 
 ### AT-2-1 — Hub answers a question and logs it **(CI, from Phase 2)**
 
@@ -75,3 +81,4 @@ Each test has a stable ID (`AT-<phase>-<n>`) so results and regressions can be r
 **Changelog**
 
 - v0.1 (2026-09-16): initial set — AT-0-1 (placeholder harness), AT-1-1..3, AT-2-1..2, AT-5-1 stubs for future phases.
+- v0.2 (2026-09-16): AT-1-1, AT-1-2, AT-1-3(b) implemented and passing against `sync-protocol/`; wired into CI. See `docs/MERGE-SEMANTICS.md`.

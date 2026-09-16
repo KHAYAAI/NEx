@@ -1,0 +1,27 @@
+# Minimal Headscale config for a single-household hub+phone mesh.
+# See README.md — this has not been deployed or tested against real
+# hardware yet. Replace server_url with the hub's real reachable
+# address (or a DNS name) before use; 127.0.0.1 only works for a
+# same-host smoke test of Headscale itself.
+
+server_url: http://127.0.0.1:8080
+listen_addr: 0.0.0.0:8080
+metrics_listen_addr: 0.0.0.0:9090
+
+database:
+  type: sqlite
+  sqlite:
+    path: /var/lib/headscale/db.sqlite
+
+# Tailscale-compatible client address ranges for the mesh.
+prefixes:
+  v4: 100.64.0.0/10
+  v6: fd7a:115c:a1e0::/48
+
+dns:
+  magic_dns: true
+  base_domain: nex.internal
+
+# No ACL policy file yet — every paired node can reach every other
+# paired node. Fine for one hub + one phone; tighten before Phase 7's
+# multi-hub mesh.

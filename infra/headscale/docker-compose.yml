@@ -1,0 +1,15 @@
+services:
+  headscale:
+    image: headscale/headscale:0.23.0
+    container_name: nex-headscale
+    restart: unless-stopped
+    command: serve
+    volumes:
+      - ./config.yaml:/etc/headscale/config.yaml:ro
+      - headscale-data:/var/lib/headscale
+    ports:
+      - "8080:8080" # control-plane API — put behind TLS before any non-loopback use
+      - "9090:9090" # metrics
+
+volumes:
+  headscale-data:

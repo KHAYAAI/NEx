@@ -1,0 +1,26 @@
+{
+  "name": "sync-protocol",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Phase 1 sync prototype: Automerge event log synced peer-to-peer over an encrypted libp2p transport. See CLAUDE.md Phase 1 and docs/MERGE-SEMANTICS.md.",
+  "type": "module",
+  "main": "src/peer.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@automerge/automerge": "^3.5.0",
+    "@chainsafe/libp2p-noise": "^17.0.0",
+    "@chainsafe/libp2p-yamux": "^8.0.1",
+    "@libp2p/identify": "^4.1.14",
+    "@libp2p/tcp": "^11.0.28",
+    "@multiformats/multiaddr": "^13.0.3",
+    "libp2p": "^3.3.11"
+  }
+}
