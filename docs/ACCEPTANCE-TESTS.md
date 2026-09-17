@@ -122,6 +122,56 @@ Each test has a stable ID (`AT-<phase>-<n>`) so results and regressions can be r
 
 **Status:** implemented and passing (11 interactions logged across the week in a representative run). "Voice" and "calendar" interaction slots are plain text/Q&A, not real voice transcription or a real calendar backend — see `infra/zero-internet/README.md`'s "What's honestly not exercised" for the complete list (also covers why "home automation" here is a real MCP tool call against a mock device, not a real Home Assistant integration).
 
+### AT-6-1 — Device identity: non-extractable key, sign/verify, tamper rejection **(CI, implemented — `hub/identity/tpm-identity-demo.sh`)**
+
+**Phase:** 6 ("Integrate the SE050 secure element for device identity").
+
+**Steps:** stand up a real TPM 2.0 (swtpm), generate a persistent ECC signing key inside it, sign a device identity assertion, verify the signature, then verify a tampered copy of the assertion.
+
+**Pass condition:** the identity key is generated and usable without ever being exported; the real signature verifies against the correct assertion; the tampered assertion is correctly rejected.
+
+**Status:** implemented and passing (4/4 checks, reran clean twice). No SE050 hardware exists in this environment (or anywhere in this project's dev environment — see `docs/DECISIONS.md` D3), so this uses a software TPM (swtpm/libtpms) via the real `tpm2-tools` CLI as a disclosed stand-in, not the SE050's own API surface — `hub/identity/README.md` states this explicitly. What's real regardless of the specific chip: in-module key generation with no export path, and a real sign/verify/tamper-rejection cycle using the actual TPM 2.0 command set.
+
+### AT-6-2 — Sandboxed tool runtime: gVisor + Wasmtime **(CI, implemented — `hub/sandbox/sandbox-demo.sh`)**
+
+**Phase:** 6 ("Move the agent/tool runtime into gVisor or Firecracker sandboxing on the hub; Wasmtime for anything lightweight enough to run in-process").
+
+**Steps:** run one of the hub's real MCP apps (`hub/apps/file-search/`) inside a gVisor (`runsc`) sandbox and confirm it both answers correctly and reports the sandbox's own fake kernel identity rather than the host's; write a canary file from inside the sandbox and confirm it's absent on the real host; run a real WebAssembly module through Wasmtime and confirm the correct result.
+
+**Pass condition:** all four checks pass.
+
+**Status:** implemented and passing (4/4 checks, reran clean twice). Uses `-platform=ptrace` rather than gVisor's default KVM platform — no `/dev/kvm` in this environment. Not Firecracker, for the same reason (`/dev/kvm` required). The WASM module is hand-written WAT, not compiled from a real hub component — no WASM toolchain is available here to do that compilation; `hub/sandbox/README.md` explains the gap.
+
+### AT-6-3 — Update mechanism: real generations and rollback **(CI, implemented — `infra/update-mechanism/nix-rollback-demo.sh`)**
+
+**Phase:** 6 ("Stand up the update mechanism per D2 (Nix generations, or OSTree/RAUC) and test a rollback from a deliberately broken update").
+
+**Steps:** build and deploy two "hub config" generations via real Nix derivations and a real `nix-env --profile`; roll back from the broken one; separately confirm a build that fails outright never touches the active generation.
+
+**Pass condition:** all five checks pass.
+
+**Status:** implemented and passing (5/5 checks, reran clean twice), against a real `nix` installed in this session specifically to test Decision D2's chosen mechanism (see `infra/update-mechanism/README.md` for the non-trivial single-user-install group/user workaround this needed). Operates one level below a full bootable NixOS system switch — this environment is a container, not a NixOS host, and `hub/flake.nix` doesn't yet define a full `nixosConfigurations.<host>` output — so the "hub config" here is a toy derivation proving the generation/rollback primitive itself, not the full boot-time integration `nixos-rebuild switch --rollback` performs. This same real `nix` was also used to retroactively validate `hub/flake.nix` (`nix flake check` and a real devShell build both pass); see the updated header comment in that file.
+
+### AT-6-4 — App distribution: real signing infra over a custom index **(CI, implemented — `infra/fdroid-repo/build-repo-demo.sh`)**
+
+**Phase:** 6 ("Stand up the F-Droid repo (or Obtainium-compatible feed) for distributing 'App' (MCP integration) packages").
+
+**Steps:** generate a real fdroidserver signing keystore; package real tarballs of the hub's actual MCP apps; build and sign an index over their real sha256 hashes; confirm a tampered copy of the signed index fails verification.
+
+**Pass condition:** all five checks pass.
+
+**Status:** implemented and passing (5/5 checks, reran clean twice). This is deliberately not a spec-compliant F-Droid or Obtainium index — both formats distribute signed Android APKs, and these "Apps" are Python MCP servers, not Android packages, so spec compliance would require misrepresenting what the packages are. A real placeholder-APK approach was tried and abandoned (verified, not assumed): no `android.jar` is available in this environment (`dl.google.com` blocked, apt's `android-sdk` ships build-tools/platform-tools only), confirmed by `aapt package` failing outright on manifest attribute resolution. `infra/fdroid-repo/README.md` covers the full reasoning, including a real bug found and fixed in the tampering negative-control itself (it originally tested a never-signed jar, not a tampered signed one).
+
+### AT-6-5 — Modem/NPU isolation: functions with zero WAN, by construction **(CI, implemented — `infra/modem-isolation/isolation-test.sh`)**
+
+**Phase:** 6 ("Isolate the modem/NPU firmware blobs behind their documented boundary; write the isolation test that proves the rest of the system functions with the modem physically switched off").
+
+**Steps:** run AT-2-2, AT-4-1, and AT-5-1 as one gated check — each already proves, independently, that its component (hub, phone, hub+phone together) functions correctly inside a real network namespace with no WAN route at all.
+
+**Pass condition:** all three underlying tests pass.
+
+**Status:** implemented and passing. No modem or NPU hardware — or firmware blob — exists anywhere in this project's dev environment (Decision D3), so there is nothing to isolate a kill switch around, and no real kill-switch signal to read. What the deliverable actually needs proven — the rest of the system keeps working with the modem physically off — is exactly what those three already-real, already-CI-wired tests demonstrate via a real no-WAN network namespace, the honest software equivalent of a powered-off radio; building a fourth, separate no-WAN test would only duplicate them. What this does not and cannot prove: resilience against a *compromised* modem/NPU firmware blob attempting active exfiltration — that needs real hardware and a real isolation boundary to test adversarially, and `docs/THREAT-MODEL.md` already names this as an open, unsolved gap rather than overclaiming it.
+
 ---
 
 **Changelog**
@@ -133,3 +183,4 @@ Each test has a stable ID (`AT-<phase>-<n>`) so results and regressions can be r
 - v0.5 (2026-09-16): AT-3-1 implemented and passing against `hub/scripts/dreaming-demo.sh` (real Qdrant, embedded; real embeddings from the hub's own model; rule-based fact extraction — see `hub/dreaming/README.md`); wired into CI.
 - v0.6 (2026-09-17): AT-4-1 implemented and passing against `pocket/scripts/pocket-demo.sh` (real airplane-mode network namespace, real Kotlin/JVM store-and-forward queue, real Automerge merge on reconnect via sync-protocol/'s Phase 1 Peer; hub/phone event-log gap closed — see `pocket/README.md`); wired into CI. No Android build or emulator — verified unavailable, not assumed.
 - v0.7 (2026-09-17): AT-5-1..3 implemented and passing against `infra/zero-internet/run-week.sh` (real dual-namespace WireGuard tunnel with an instrumented, canary-verified egress lockdown; a 7-day simulated integration test covering two new real MCP apps — `hub/apps/notes/`, `hub/apps/smart-home/`; a 100-write concurrent-conflict load test); wired into CI.
+- v0.8 (2026-09-17): AT-6-1..5 implemented and passing — AT-6-1 real TPM 2.0 (swtpm/tpm2-tools) device identity (`hub/identity/`); AT-6-2 real gVisor + Wasmtime sandboxing (`hub/sandbox/`); AT-6-3 real Nix generations/rollback (`infra/update-mechanism/`), which also retroactively validated `hub/flake.nix`; AT-6-4 real fdroidserver signing infra over a custom, explicitly-non-spec-compliant index (`infra/fdroid-repo/`); AT-6-5 modem/NPU isolation proven by gating on the three existing no-WAN tests (`infra/modem-isolation/`) rather than duplicating them, since no modem/NPU hardware exists in this environment. All wired into CI.

@@ -2,13 +2,23 @@
   Hub OS declarative config — Decision D2 (docs/DECISIONS.md): NixOS
   native generations/rollback, no OSTree/RAUC on the hub.
 
-  Status: written, NOT validated. This environment has no `nix`
-  installed, so `nix flake check` / `nixos-rebuild build` have not been
-  run against this file — unlike everything else committed so far in
-  Phase 1/2, which was built and actually executed. Treat this as a
-  reviewable draft of the intended module structure, not as proven
-  working config. It should be the first thing checked with real Nix
-  tooling once real dev-board hardware (Decision D3) is available.
+  Status (updated Phase 6): `nix flake check` and `nix build
+  .#devShells.x86_64-linux.default` both pass for real against this
+  file — `nix` was installed in this session specifically to check it
+  (see infra/update-mechanism/README.md for the install quirks). The
+  devShell build pulled and built real nixpkgs packages, including
+  qdrant-client — correcting an earlier assumption below that it
+  wasn't packaged.
+
+  Still NOT validated: the `nixosModules.hub` module only type-checks
+  and evaluates (`nix flake check` covers that) — it has not been
+  built into a full bootable `nixosConfiguration` and switched to,
+  because this environment is a container, not a NixOS host, and
+  hub/flake.nix doesn't (yet) define a full `nixosConfigurations.<host>`
+  output to build one from. That's the real remaining validation, and
+  it needs actual dev-board hardware (Decision D3) to mean anything —
+  a systemd service "evaluating correctly" is not the same claim as
+  "the llama-server unit actually starts on boot."
 
   What it declares:
     - llama-server as a systemd service, serving the model at

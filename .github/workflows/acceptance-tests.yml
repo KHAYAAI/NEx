@@ -207,3 +207,122 @@ jobs:
         # sudo resets PATH; the script needs the toolchains above plus
         # network namespaces, WireGuard, and iptables.
         run: sudo env PATH="$PATH" infra/zero-internet/run-week.sh
+
+  device-identity:
+    name: AT-6-1 device identity — TPM sign/verify (Phase 6)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install swtpm and tpm2-tools
+        run: sudo apt-get update -qq && sudo apt-get install -y swtpm tpm2-tools
+
+      - name: Run the TPM identity demo (AT-6-1)
+        run: hub/identity/tpm-identity-demo.sh
+
+  sandbox-runtime:
+    name: AT-6-2 sandboxed tool runtime — gVisor + Wasmtime (Phase 6)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install gVisor (runsc)
+        run: sudo apt-get update -qq && sudo apt-get install -y runsc
+
+      - name: Install Wasmtime
+        run: curl https://wasmtime.dev/install.sh -sSf | bash -s -- --to /usr/local/bin
+
+      - name: Set up the hub's file-search app dependencies
+        run: |
+          python3 -m venv /tmp/nex-hub-venv
+          /tmp/nex-hub-venv/bin/pip install -q mcp httpx
+
+      - name: Run the sandbox demo (AT-6-2)
+        run: sudo env PATH="$PATH" hub/sandbox/sandbox-demo.sh
+
+  update-mechanism:
+    name: AT-6-3 update mechanism — Nix generations/rollback (Phase 6)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix (single-user)
+        run: |
+          sudo groupadd nixbld
+          sudo useradd -M -N -g users -G nixbld nixbld1
+          sh <(curl -sSL https://releases.nixos.org/nix/nix-2.24.9/install) --no-daemon
+          echo "$HOME/.nix-profile/bin" >> "$GITHUB_PATH"
+
+      - name: Run the Nix rollback demo (AT-6-3)
+        run: infra/update-mechanism/nix-rollback-demo.sh
+
+  app-distribution:
+    name: AT-6-4 app distribution — signed index (Phase 6)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Install fdroidserver
+        run: sudo apt-get update -qq && sudo apt-get install -y fdroidserver
+
+      - name: Run the F-Droid repo build/signing demo (AT-6-4)
+        run: infra/fdroid-repo/build-repo-demo.sh
+
+  modem-isolation:
+    name: AT-6-5 modem/NPU isolation — zero-WAN gate (Phase 6)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Cache llama.cpp build
+        uses: actions/cache@v4
+        with:
+          path: /tmp/nex-llama.cpp
+          key: llama-cpp-${{ runner.os }}-${{ hashFiles('.github/workflows/acceptance-tests.yml') }}
+
+      - name: Install build tooling
+        run: sudo apt-get update -qq && sudo apt-get install -y cmake build-essential iproute2 wireguard-tools
+
+      - name: Build wireguard-go (userspace — GitHub Actions runners have no kernel WireGuard module)
+        run: |
+          git clone --depth 1 https://github.com/WireGuard/wireguard-go.git /tmp/wireguard-go
+          cd /tmp/wireguard-go
+          go build -o /usr/local/bin/wireguard-go .
+
+      - name: Run the modem/NPU isolation gate (AT-6-5) — runs AT-2-2, AT-4-1, AT-5-1 as one check
+        # No dedicated no-WAN test of its own: it gates on the three
+        # already-real, already-CI-wired tests above that each prove
+        # correct operation with zero WAN access — see
+        # infra/modem-isolation/README.md for why a fourth test would
+        # just duplicate them.
+        run: sudo env PATH="$PATH" infra/modem-isolation/isolation-test.sh
