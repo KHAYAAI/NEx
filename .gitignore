@@ -6,3 +6,8 @@ __pycache__/
 .venv/
 *.gguf
 *.gguf.special_token_ids.json
+.gradle/
+build/
+*.class
+*.jar
+local.properties

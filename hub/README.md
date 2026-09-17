@@ -23,7 +23,12 @@ Working and tested (`hub/scripts/hub-stack-demo.sh` and
 - **One MCP "App"** (`hub/apps/file-search/`) — real MCP protocol,
   real tool execution, scoped read-only file search.
 - **Event log** (`hub/memory/eventlog.py`) — plain SQLite, one row per
-  interaction, sub-second write latency verified.
+  interaction, sub-second write latency verified. Built in Phase 2
+  without any connection to Phase 1's CRDT sync layer — a real gap that
+  stood open until Phase 4's pocket demo (`pocket/scripts/pocket-demo.sh`)
+  closed it: interactions synced in from the pocket node now land here
+  too, tagged `pocket-relayed`, traceable the same way as a locally-asked
+  question.
 - **Dreaming pipeline** (`hub/dreaming/`) — nightly consolidation:
   rule-based fact extraction (same "needs real weights" caveat as tool
   dispatch — see `hub/dreaming/README.md`), real embeddings from the

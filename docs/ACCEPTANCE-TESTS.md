@@ -82,6 +82,16 @@ Each test has a stable ID (`AT-<phase>-<n>`) so results and regressions can be r
 
 **Status:** implemented and passing. Fact extraction is rule-based (regex over the user's own statements — see `hub/dreaming/README.md` for why, same reasoning as the agent loop's tool-call dispatch), but the storage/reinforcement/decay/audit mechanism is real: real Qdrant (embedded — Docker Hub is also blocked by this environment's network policy, so this runs `qdrant-client`'s embedded mode rather than a served instance), real embeddings from the hub's actual `llama-server` (semantically meaningless, since the underlying model is synthetic — same caveat as `hub/models/README.md` throughout), real reinforcement counting, and a real append-only audit log of every extract/reinforce/prune action. A real bug surfaced and fixed while building this: `consolidate.py` originally stamped every fact's "last reinforced" time with the *consolidation run's* clock instead of the *interaction's own* timestamp, which silently broke decay (see the comment in `hub/dreaming/consolidate.py`). QLoRA fine-tuning remains explicitly out of scope, per the plan — nothing here touches model weights.
 
+### AT-4-1 — Offline for five questions, all reconcile within 60s **(CI, implemented — `pocket/scripts/pocket-demo.sh`)**
+
+**Phase:** 4 exit criteria (`CLAUDE.md` §5, Phase 4).
+
+**Steps:** put the phone in airplane mode, ask it five different questions, confirm the offline model answers all five, then reconnect.
+
+**Pass condition:** the offline model answers all five reasonably; all five appear correctly ordered in the hub's event log within 60 seconds of reconnecting.
+
+**Status:** implemented and passing, across repeated runs (observed sync time 3-4 seconds, well inside the 60s budget). "Airplane mode" is a real network namespace with no WAN route, not a simulated disconnect — same technique as AT-2-2. The offline answer is real (llama.cpp + the hub's synthetic-weight model — see `hub/models/README.md`; MLC LLM is the plan's stated target and is substituted here, per `pocket/README.md`). The queue is a real, unit-tested Kotlin/JVM module (`pocket/sync/`). The reconnect merge uses `sync-protocol/`'s already-proven Automerge `Peer` (Phase 1) rather than a real on-device CRDT binding — `pocket/README.md` explains exactly why that binding isn't built here. Synced events are also mirrored into the hub's real event log (`hub/memory/eventlog.py`), closing a gap between Phase 1's CRDT-log prototype and Phase 2's plain-SQLite hub log that had been open since Phase 2. **Not validated:** anything Android-specific — no build, no emulator (verified: the Android Gradle Plugin itself fails to resolve here, `dl.google.com` is blocked) — see `pocket/client/README.md`.
+
 ### AT-5-1 — No outbound calls outside the tunnel, instrumented **(CI, from Phase 5)**
 
 **Phase:** 5 security pass.
@@ -99,3 +109,4 @@ Each test has a stable ID (`AT-<phase>-<n>`) so results and regressions can be r
 - v0.3 (2026-09-16): AT-1-1..3 re-validated over a real WireGuard tunnel between two network namespaces (`infra/wireguard-poc/`), not just loopback.
 - v0.4 (2026-09-16): AT-2-1 and AT-2-2 implemented and passing against `hub/scripts/hub-stack-demo.sh` (real llama.cpp + real Qwen2 tokenizer + synthetic weights — see `hub/models/README.md`); wired into CI. AT-2-2 fulfills AT-0-1's original placeholder note.
 - v0.5 (2026-09-16): AT-3-1 implemented and passing against `hub/scripts/dreaming-demo.sh` (real Qdrant, embedded; real embeddings from the hub's own model; rule-based fact extraction — see `hub/dreaming/README.md`); wired into CI.
+- v0.6 (2026-09-17): AT-4-1 implemented and passing against `pocket/scripts/pocket-demo.sh` (real airplane-mode network namespace, real Kotlin/JVM store-and-forward queue, real Automerge merge on reconnect via sync-protocol/'s Phase 1 Peer; hub/phone event-log gap closed — see `pocket/README.md`); wired into CI. No Android build or emulator — verified unavailable, not assumed.
