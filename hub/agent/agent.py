@@ -37,19 +37,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "dreaming"))
 from eventlog import EventLog  # noqa: E402
 from facts import FactStore  # noqa: E402
 
-MCP_SERVER_SCRIPT = Path(__file__).resolve().parent.parent / "apps" / "file-search" / "server.py"
+APPS_DIR = Path(__file__).resolve().parent.parent / "apps"
 RECALL_PHRASE = "what do you know about me"
 
 
-async def call_file_search_tool(query: str, root: Path) -> str:
-    params = StdioServerParameters(
-        command=sys.executable,
-        args=[str(MCP_SERVER_SCRIPT), "--root", str(root)],
-    )
+async def call_mcp_tool(server_script: Path, server_args: list[str], tool_name: str, tool_args: dict) -> str:
+    """Generic MCP client call — real protocol, real subprocess, for any
+    of hub/apps/'s servers. hub/apps/README.md lists what's available."""
+    params = StdioServerParameters(command=sys.executable, args=[str(server_script), *server_args])
     async with stdio_client(params) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
-            result = await session.call_tool("search_files", {"query": query})
+            result = await session.call_tool(tool_name, tool_args)
             return "\n".join(
                 block.text for block in result.content if getattr(block, "type", None) == "text"
             )
@@ -115,7 +114,8 @@ def recall_answer(question: str, *, qdrant_path: Path | None, audit_db: Path | N
 
 
 async def answer(question: str, *, llama_url: str, mcp_root: Path, model_path: Path | None,
-                  qdrant_path: Path | None = None, audit_db: Path | None = None, vector_size: int = 64):
+                  qdrant_path: Path | None = None, audit_db: Path | None = None, vector_size: int = 64,
+                  apps_data_dir: Path | None = None):
     tool_used = None
     tool_result = None
     prompt = question
@@ -127,14 +127,48 @@ async def answer(question: str, *, llama_url: str, mcp_root: Path, model_path: P
         if recalled is not None:
             return recalled, "fact_recall", None
 
-    if question.lower().startswith("search:"):
+    lowered = question.lower()
+    apps_data_dir = apps_data_dir or Path(".")
+
+    if lowered.startswith("search:"):
         query = question.split(":", 1)[1].strip()
         tool_used = "search_files"
-        tool_result = await call_file_search_tool(query, mcp_root)
-        prompt = (
-            f"Using this file search result, answer the question.\n\n"
-            f"Search result for {query!r}:\n{tool_result}\n\nQuestion: {query}"
+        tool_result = await call_mcp_tool(
+            APPS_DIR / "file-search" / "server.py", ["--root", str(mcp_root)], "search_files", {"query": query}
         )
+        prompt = f"Using this file search result, answer the question.\n\nSearch result for {query!r}:\n{tool_result}\n\nQuestion: {query}"
+
+    elif lowered.startswith("notes:"):
+        # "notes: add <text>" or "notes: list"
+        rest = question.split(":", 1)[1].strip()
+        tool_used = "notes"
+        server_args = ["--store", str(apps_data_dir / "notes.json")]
+        if rest.lower().startswith("add "):
+            tool_result = await call_mcp_tool(
+                APPS_DIR / "notes" / "server.py", server_args, "add_note", {"text": rest[4:].strip()}
+            )
+        else:
+            tool_result = await call_mcp_tool(APPS_DIR / "notes" / "server.py", server_args, "list_notes", {})
+        prompt = f"Using this notes-app result, answer the question.\n\nResult:\n{tool_result}\n\nQuestion: {question}"
+
+    elif lowered.startswith("home:"):
+        # "home: get <device>" or "home: set <device> <state>"
+        rest = question.split(":", 1)[1].strip()
+        tool_used = "smart_home"
+        server_args = ["--store", str(apps_data_dir / "devices.json")]
+        parts = rest.split()
+        if parts and parts[0].lower() == "set" and len(parts) >= 3:
+            tool_result = await call_mcp_tool(
+                APPS_DIR / "smart-home" / "server.py", server_args,
+                "set_device_state", {"device": parts[1], "state": " ".join(parts[2:])},
+            )
+        elif parts and parts[0].lower() == "get" and len(parts) >= 2:
+            tool_result = await call_mcp_tool(
+                APPS_DIR / "smart-home" / "server.py", server_args, "get_device_state", {"device": parts[1]}
+            )
+        else:
+            tool_result = f"couldn't parse home-automation command: {rest!r}"
+        prompt = f"Using this smart-home result, answer the question.\n\nResult:\n{tool_result}\n\nQuestion: {question}"
 
     reply = call_local_model(llama_url, prompt, model_path=model_path)
     return reply, tool_used, tool_result
@@ -154,6 +188,8 @@ def main():
                     help="Phase 3 fact store path — enables 'what do you know about me' (see hub/dreaming/)")
     p.add_argument("--facts-audit-db", type=Path, default=None)
     p.add_argument("--vector-size", type=int, default=64)
+    p.add_argument("--apps-data-dir", type=Path, default=None,
+                    help="where the notes/smart-home apps persist their state (see hub/apps/)")
     args = p.parse_args()
 
     log = EventLog(args.db_path)
@@ -162,6 +198,7 @@ def main():
         answer(
             args.question, llama_url=args.llama_url, mcp_root=args.mcp_root, model_path=args.model_path,
             qdrant_path=args.qdrant_path, audit_db=args.facts_audit_db, vector_size=args.vector_size,
+            apps_data_dir=args.apps_data_dir,
         )
     )
     latency_ms = (time.monotonic() - t0) * 1000

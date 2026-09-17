@@ -8,10 +8,11 @@ synthetic right now.
 
 ## Files
 
-- `agent.py` — the loop itself. `search:<query>` as a question prefix
-  triggers a real MCP tool call against `hub/apps/file-search/` (see
-  below); anything else goes straight to the local model. Logs every
-  interaction via `hub/memory/eventlog.py`.
+- `agent.py` — the loop itself. `search:<query>`, `notes:add <text>`,
+  `notes:list`, `home:get <device>`, and `home:set <device> <state>`
+  as question prefixes each trigger a real MCP tool call against the
+  matching `hub/apps/` server; anything else goes straight to the
+  local model. Logs every interaction via `hub/memory/eventlog.py`.
 - `requirements.txt` — `mcp`, `httpx` — covers both this and
   `hub/apps/file-search/`.
 

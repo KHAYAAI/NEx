@@ -92,13 +92,35 @@ Each test has a stable ID (`AT-<phase>-<n>`) so results and regressions can be r
 
 **Status:** implemented and passing, across repeated runs (observed sync time 3-4 seconds, well inside the 60s budget). "Airplane mode" is a real network namespace with no WAN route, not a simulated disconnect — same technique as AT-2-2. The offline answer is real (llama.cpp + the hub's synthetic-weight model — see `hub/models/README.md`; MLC LLM is the plan's stated target and is substituted here, per `pocket/README.md`). The queue is a real, unit-tested Kotlin/JVM module (`pocket/sync/`). The reconnect merge uses `sync-protocol/`'s already-proven Automerge `Peer` (Phase 1) rather than a real on-device CRDT binding — `pocket/README.md` explains exactly why that binding isn't built here. Synced events are also mirrored into the hub's real event log (`hub/memory/eventlog.py`), closing a gap between Phase 1's CRDT-log prototype and Phase 2's plain-SQLite hub log that had been open since Phase 2. **Not validated:** anything Android-specific — no build, no emulator (verified: the Android Gradle Plugin itself fails to resolve here, `dl.google.com` is blocked) — see `pocket/client/README.md`.
 
-### AT-5-1 — No outbound calls outside the tunnel, instrumented **(CI, from Phase 5)**
+### AT-5-1 — No outbound calls outside the tunnel, instrumented **(CI, implemented — `infra/zero-internet/run-week.sh`)**
 
 **Phase:** 5 security pass.
 
 **Steps:** run the full hub+phone stack inside an instrumented network namespace that logs/fails any DNS or HTTP(S) attempt outside the WireGuard tunnel interface, under a realistic week-long simulated-use script.
 
 **Pass condition:** zero unexpected outbound attempts logged. Any attempt fails the build.
+
+**Status:** implemented and passing, across repeated runs. Both the hub and phone namespaces get an `iptables` OUTPUT lockdown (loopback and the WireGuard tunnel's own traffic only); a canary check first proves the lockdown actually catches a bypass attempt (a direct call to the peer's veth address, not through the tunnel) — before that fix, a naive canary against an unroutable public IP silently failed to trip the firewall at all (it failed at the routing stage, before ever reaching `iptables`), which would have made a "0 rejects" result meaningless. After the canary is confirmed working, a full simulated week of real hub/phone activity runs, and the counters are checked again — zero increase, both namespaces, every run.
+
+### AT-5-2 — Sync layer load test: realistic conflict rates **(CI, implemented — `infra/zero-internet/run-week.sh`)**
+
+**Phase:** 5 ("load-test the sync layer with realistic conflict rates").
+
+**Steps:** with hub and phone both connected simultaneously (not offline-then-reconnect), fire 100 rapid writes to the *same* Automerge field — 50 from each side — and check convergence.
+
+**Pass condition:** both peers converge on the identical final value, deterministically, with no crash or desync.
+
+**Status:** implemented and passing. This is a genuinely different case from Phase 1's AT-1-3 (which tests two nodes disconnected, each writing once, then reconciling) — here both nodes are live and racing each other on the same field for the whole burst. Automerge's conflict-tracking only records the most recent concurrent pair once history moves on, so the meaningful assertion at this volume is convergence and stability, not enumerating every intermediate conflict (AT-1-3 already covers that at small scale).
+
+### AT-5-3 — Full week, full integration **(CI, implemented — `infra/zero-internet/run-week.sh`)**
+
+**Phase:** 5 ("run the full 'zero internet after initial setup' test end-to-end... for a full week of simulated real use").
+
+**Steps:** 7 simulated days of hub local activity (Q&A, notes, mock smart-home) plus Phase 3's nightly consolidation, two phone offline/reconnect cycles over the real WireGuard tunnel, and the AT-5-2 load test — all with zero WAN route available to either side.
+
+**Pass condition:** sustained operation across the week; interactions from both hub and phone end up in the hub's real event log.
+
+**Status:** implemented and passing (11 interactions logged across the week in a representative run). "Voice" and "calendar" interaction slots are plain text/Q&A, not real voice transcription or a real calendar backend — see `infra/zero-internet/README.md`'s "What's honestly not exercised" for the complete list (also covers why "home automation" here is a real MCP tool call against a mock device, not a real Home Assistant integration).
 
 ---
 
@@ -110,3 +132,4 @@ Each test has a stable ID (`AT-<phase>-<n>`) so results and regressions can be r
 - v0.4 (2026-09-16): AT-2-1 and AT-2-2 implemented and passing against `hub/scripts/hub-stack-demo.sh` (real llama.cpp + real Qwen2 tokenizer + synthetic weights — see `hub/models/README.md`); wired into CI. AT-2-2 fulfills AT-0-1's original placeholder note.
 - v0.5 (2026-09-16): AT-3-1 implemented and passing against `hub/scripts/dreaming-demo.sh` (real Qdrant, embedded; real embeddings from the hub's own model; rule-based fact extraction — see `hub/dreaming/README.md`); wired into CI.
 - v0.6 (2026-09-17): AT-4-1 implemented and passing against `pocket/scripts/pocket-demo.sh` (real airplane-mode network namespace, real Kotlin/JVM store-and-forward queue, real Automerge merge on reconnect via sync-protocol/'s Phase 1 Peer; hub/phone event-log gap closed — see `pocket/README.md`); wired into CI. No Android build or emulator — verified unavailable, not assumed.
+- v0.7 (2026-09-17): AT-5-1..3 implemented and passing against `infra/zero-internet/run-week.sh` (real dual-namespace WireGuard tunnel with an instrumented, canary-verified egress lockdown; a 7-day simulated integration test covering two new real MCP apps — `hub/apps/notes/`, `hub/apps/smart-home/`; a 100-write concurrent-conflict load test); wired into CI.
