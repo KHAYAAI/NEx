@@ -134,7 +134,7 @@ Legend: **P0** Scaffolding · **P1** Sync protocol · **P2** Hub bring-up · **P
 
 | Project | Phase | Notes |
 |---|---|---|
-| exo | P7 | Compute pooling across multiple hub units — additive to, not a replacement for, the P1 CRDT sync |
+| exo | P7 | Compute pooling across multiple hub units — additive to, not a replacement for, the P1 CRDT sync. Evaluated hands-on (`infra/multi-hub-mesh/`); integration deferred — real upstream CPU-wheel bug found, see `docs/DECISIONS.md` D6. |
 
 ## Mobile app framework
 
