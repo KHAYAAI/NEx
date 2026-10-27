@@ -1,18 +1,29 @@
 # NEx
 
-A two-node, cloud-independent personal AI system: an open-hardware home hub (the "brain") paired with a privacy-first handset (the "body"), synchronized over encrypted P2P links, with personalization handled by on-device nightly consolidation instead of data extraction.
+A two-node, cloud-independent personal AI system: an open-hardware home hub (the "brain") paired with a privacy-first handset (the "body"), synchronized over encrypted P2P links, with personalization handled by on-device nightly consolidation instead of data extraction. Bought once, owned forever, auditable down to the schematic.
 
 See `CLAUDE.md` for the full build plan and phased roadmap, `DEPENDENCIES.md` for the dependency list by phase, and `docs/` for decisions, the threat model, and the acceptance test suite.
 
-## Decisions (D1-D5)
+## Architecture
 
-Locked before Phase 1 work starts. Full reasoning in `docs/DECISIONS.md`.
+- **Hub ("Brain")** — a fanless, wall-powered box at home. Runs a local LLM (llama.cpp), a persistent memory store (event log + vector store), a sandboxed agent/tool runtime ("Apps"), a nightly "dreaming" consolidation job that extracts durable facts without touching model weights, and Home Assistant integration for real IoT control.
+- **Pocket ("Body")** — a de-Googled Android handset. A thin client, a small local model for offline fallback, and a store-and-forward queue so interactions made while disconnected merge back in cleanly on reconnect.
+- **The link** — a WireGuard-encrypted P2P tunnel (self-hosted Headscale for peer discovery, no third-party coordination server) carrying a CRDT-synced event log (Automerge), so both nodes can go offline and keep writing independently, then reconcile conflicting concurrent writes deterministically on reconnect.
+
+## Principles
+
+The acceptance test applied to every change (`CLAUDE.md` §1): no cloud calls or telemetry, ever, unless a narrow, user-toggled, clearly-logged exception is explicitly built (none has been); all hub↔phone sync end-to-end encrypted; all user-facing components open source; closed firmware blobs (modem, NPU) isolated behind a documented boundary and never trusted with plaintext; every feature degrades gracefully to zero internet after setup — a PR that breaks offline operation does not merge.
+
+## Decisions (D1-D6)
+
+Locked before Phase 1 work starts, plus D6 added after Phase 7's evaluation. Full reasoning in `docs/DECISIONS.md`.
 
 - **D1 — Cloud fallback:** none. Strict local-only, no cloud calls ever.
 - **D2 — Hub OS:** NixOS, native generations/rollback. No OSTree/RAUC on the hub.
 - **D3 — Dev hardware:** Jetson AGX Orin 64GB for Phases 1-4 dev; Sophon SE9/BM1688 validated in parallel once the stack is stable.
 - **D4 — Agent runtime:** smolagents for the Phase 2 minimal agent loop.
 - **D5 — Pocket OS:** /e/OS or LineageOS (final pick deferred to Phase 4 kickoff).
+- **D6 — Multi-hub mesh:** `exo` integration deferred. Evaluated hands-on in Phase 7; a real upstream bug blocks its CPU-only Linux path (NEx's actual no-GPU target tiers), plus a sandbox-specific IPv6 blocker in coordinator-only mode. Revisit once upstream is fixed and real dev-board hardware exists to test against.
 
 ## Status
 
